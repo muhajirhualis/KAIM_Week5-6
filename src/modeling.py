@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, f1_score, precision_recall_curve, auc, roc_auc_score
@@ -93,4 +94,53 @@ class FraudModeler:
         
         print(f"--- Cross Validation ({k}-Fold) for {model_name} ---")
         print(f"Mean F1 Score: {scores.mean():.4f}")
-        print(f"Standard Deviation: {scores.std():.4f}") # [cite: 155]
+        print(f"Standard Deviation: {scores.std():.4f}") 
+
+    def tune_random_forest(self):
+        """
+        Task 2b.2: Explicit Hyperparameter Tuning using GridSearch.
+        """
+        print("Starting Hyperparameter Tuning for Random Forest...")
+        param_grid = {
+            'n_estimators': [50, 100],
+            'max_depth': [10, 20, None],
+            'min_samples_split': [2, 5]
+        }
+        
+        rf = RandomForestClassifier(random_state=42)
+        grid_search = GridSearchCV(
+            estimator=rf, 
+            param_grid=param_grid, 
+            cv=3, 
+            scoring='f1', 
+            n_jobs=-1
+        )
+        
+        grid_search.fit(self.X_train, self.y_train)
+        print(f"Best Parameters: {grid_search.best_params_}")
+        
+        # Save the best model
+        self.models['RandomForest_Tuned'] = grid_search.best_estimator_
+        return grid_search.best_estimator_
+
+
+    def get_metrics(self, model_name):
+        """
+        Helper to return metrics for the side-by-side comparison table.
+        """
+        if model_name not in self.models:
+            raise ValueError(f"Model {model_name} has not been trained yet.")
+            
+        model = self.models[model_name]
+        y_pred = model.predict(self.X_test)
+        y_prob = model.predict_proba(self.X_test)[:, 1]
+
+        # Calculate AUC-PR
+        precision, recall, _ = precision_recall_curve(self.y_test, y_prob)
+        auc_pr_value = auc(recall, precision)
+        
+        return {
+            'f1': f1_score(self.y_test, y_pred),
+            'auc_pr': auc_pr_value,
+            'roc_auc': roc_auc_score(self.y_test, y_prob)
+        }
